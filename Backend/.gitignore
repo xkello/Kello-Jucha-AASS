@@ -1,0 +1,29 @@
+# Python virtual environments
+.venv/
+venv/
+env/
+
+# Python cache/artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Test/tool caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+
+# Coverage artifacts
+.coverage
+.coverage.*
+htmlcov/
+
+# Local environment and editor files
+.env
+.vscode/
+
+# Local runtime data
+*.log
+*.sqlite3
+*.db
