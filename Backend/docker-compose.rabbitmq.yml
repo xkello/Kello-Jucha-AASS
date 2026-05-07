@@ -1,0 +1,78 @@
+# RabbitMQ override – layer on top of docker-compose.yml
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.rabbitmq.yml up --build
+
+services:
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    ports:
+      - "5672:5672"    # AMQP
+      - "15672:15672"  # Management UI  →  http://localhost:15672  (guest/guest)
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+
+  # Add RabbitMQ dependency to the existing backend service
+  backend:
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  # ── Workers ────────────────────────────────────────────────────────────────
+  worker-audit:
+    build: .
+    env_file:
+      - .env
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+    command: python run_worker.py audit
+    restart: unless-stopped
+
+  worker-notification:
+    build: .
+    env_file:
+      - .env
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    command: python run_worker.py notification
+    restart: unless-stopped
+
+  worker-timesheet:
+    build: .
+    env_file:
+      - .env
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    command: python run_worker.py timesheet
+    restart: unless-stopped
+
+  worker-absence:
+    build: .
+    env_file:
+      - .env
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    command: python run_worker.py absence
+    restart: unless-stopped
+
+  worker-approval:
+    build: .
+    env_file:
+      - .env
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    command: python run_worker.py approval
+    restart: unless-stopped

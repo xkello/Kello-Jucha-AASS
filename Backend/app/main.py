@@ -1,15 +1,38 @@
+import logging
+from contextlib import asynccontextmanager
+
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.api import absences, audit, auth, manager, teams, timesheets, users
+from app.core.config import settings
 from app.core.database import get_db
+from app.messaging import connection as mq
+
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # ── Startup ──────────────────────────────────────────────────────────────
+    try:
+        await mq.connect(settings.rabbitmq_url)
+    except Exception:
+        logger.warning("RabbitMQ unavailable on startup – messaging disabled", exc_info=True)
+
+    yield
+
+    # ── Shutdown ─────────────────────────────────────────────────────────────
+    await mq.disconnect()
+
 
 app = FastAPI(
     title="Timesheet & Absence Portal API",
     version="1.0.0",
     description="Production-like MVP backend for timesheets, absences, approvals, teams, and audit logging.",
+    lifespan=lifespan,
 )
 
 app.add_middleware(

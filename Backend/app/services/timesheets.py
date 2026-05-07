@@ -10,6 +10,8 @@ from app.models import AbsenceRequest, AbsenceStatus, AbsenceType, DayType, Role
 from app.schemas import DayEntryCreate
 from app.services.access import ensure_manager_or_admin_for_target
 from app.services.audit import log_event
+from app.messaging.events import AdminUnlockRequest, ApprovalDecisionMade, TimesheetSubmitted
+from app.messaging.publisher import schedule_publish
 
 MAX_MONTHLY_HOURS = 160
 MAX_UNAPPROVED_SICK_DAYS = 1
@@ -159,6 +161,14 @@ def submit_timesheet(db: Session, actor: User, timesheet: Timesheet) -> Timeshee
     db.add(timesheet)
     db.commit()
     db.refresh(timesheet)
+    schedule_publish(TimesheetSubmitted(
+        actor_id=actor.id,
+        timesheet_id=timesheet.id,
+        user_id=timesheet.user_id,
+        total_hours=total,
+        year=timesheet.year,
+        month=timesheet.month,
+    ))
     return timesheet
 
 
@@ -177,6 +187,13 @@ def approve_timesheet(db: Session, actor: User, timesheet: Timesheet) -> Timeshe
     log_event(db, actor, "timesheet.approved", "Timesheet", timesheet.id, {"approved_for_user": timesheet.user_id})
     db.commit()
     db.refresh(timesheet)
+    schedule_publish(ApprovalDecisionMade(
+        actor_id=actor.id,
+        entity_type="Timesheet",
+        entity_id=timesheet.id,
+        decision="approved",
+        target_user_id=timesheet.user_id,
+    ))
     return timesheet
 
 
@@ -193,6 +210,14 @@ def reject_timesheet(db: Session, actor: User, timesheet: Timesheet, comment: st
     db.add(timesheet)
     log_event(db, actor, "timesheet.rejected", "Timesheet", timesheet.id, {"comment": timesheet.rejection_comment})
     db.commit()
+    schedule_publish(ApprovalDecisionMade(
+        actor_id=actor.id,
+        entity_type="Timesheet",
+        entity_id=timesheet.id,
+        decision="rejected",
+        target_user_id=timesheet.user_id,
+        comment=timesheet.rejection_comment,
+    ))
     db.refresh(timesheet)
     return timesheet
 
@@ -208,4 +233,10 @@ def unlock_timesheet(db: Session, actor: User, timesheet: Timesheet, reason: str
     log_event(db, actor, "timesheet.unlocked", "Timesheet", timesheet.id, {"reason": reason})
     db.commit()
     db.refresh(timesheet)
+    schedule_publish(AdminUnlockRequest(
+        actor_id=actor.id,
+        entity_type="Timesheet",
+        entity_id=timesheet.id,
+        reason=reason,
+    ))
     return timesheet

@@ -10,6 +10,8 @@ from app.schemas import AbsenceCreate
 from app.services.access import ensure_manager_or_admin_for_target
 from app.services.audit import log_event
 from app.services.timesheets import get_or_create_timesheet
+from app.messaging.events import AbsenceRequested, ApprovalDecisionMade
+from app.messaging.publisher import schedule_publish
 
 VACATION_LIMIT_DAYS = 14
 
@@ -109,6 +111,14 @@ def create_absence(db: Session, actor: User, payload: AbsenceCreate) -> AbsenceR
     log_event(db, actor, "absence.requested", "AbsenceRequest", absence.id, {"type": absence.type, "date_from": absence.date_from, "date_to": absence.date_to})
     db.commit()
     db.refresh(absence)
+    schedule_publish(AbsenceRequested(
+        actor_id=actor.id,
+        absence_id=absence.id,
+        user_id=absence.user_id,
+        absence_type=absence.type.value,
+        date_from=absence.date_from.isoformat(),
+        date_to=absence.date_to.isoformat(),
+    ))
     return absence
 
 
@@ -142,6 +152,13 @@ def approve_absence(db: Session, actor: User, absence: AbsenceRequest, comment: 
     log_event(db, actor, "absence.approved", "AbsenceRequest", absence.id, {"user_id": absence.user_id, "type": absence.type})
     db.commit()
     db.refresh(absence)
+    schedule_publish(ApprovalDecisionMade(
+        actor_id=actor.id,
+        entity_type="AbsenceRequest",
+        entity_id=absence.id,
+        decision="approved",
+        target_user_id=absence.user_id,
+    ))
     return absence
 
 
@@ -158,6 +175,14 @@ def reject_absence(db: Session, actor: User, absence: AbsenceRequest, comment: s
     log_event(db, actor, "absence.rejected", "AbsenceRequest", absence.id, {"comment": comment})
     db.commit()
     db.refresh(absence)
+    schedule_publish(ApprovalDecisionMade(
+        actor_id=actor.id,
+        entity_type="AbsenceRequest",
+        entity_id=absence.id,
+        decision="rejected",
+        target_user_id=absence.user_id,
+        comment=comment,
+    ))
     return absence
 
 
