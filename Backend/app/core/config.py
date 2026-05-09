@@ -9,7 +9,11 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://postgres:postgres@db:5432/timesheet_portal"
     seed_demo_data: bool = True
     demo_password: str = "demo123"
+    rabbitmq_enabled: bool = False
     rabbitmq_url: str = "amqp://guest:guest@rabbitmq:5672/"
+    camunda_enabled: bool = False
+    zeebe_address: str = "zeebe:26500"
+    camunda_process_id: str = "Process_TimesheetApproval"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

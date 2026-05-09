@@ -26,10 +26,11 @@ services:
       elasticsearch:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:9600/actuator/health || exit 1"]
-      interval: 30s
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9600/actuator/health/startup || exit 1"]
+      start_period: 40s
+      interval: 20s
       timeout: 10s
-      retries: 10
+      retries: 20
 
   operate:
     image: camunda/operate:8.5.5
@@ -41,7 +42,7 @@ services:
       - CAMUNDA_OPERATE_ZEEBEELASTICSEARCH_URL=http://elasticsearch:9200
     depends_on:
       zeebe:
-        condition: service_healthy
+        condition: service_started
       elasticsearch:
         condition: service_healthy
 
@@ -56,18 +57,37 @@ services:
     volumes:
       - elasticsearch_data:/usr/share/elasticsearch/data
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health || exit 1"]
+      test: ["CMD-SHELL", "curl -fsS \"http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=50s\" || exit 1"]
+      start_period: 40s
       interval: 20s
       timeout: 10s
-      retries: 15
+      retries: 20
 
   # Add Camunda/Zeebe env vars to the existing backend service
   backend:
     environment:
+      - CAMUNDA_ENABLED=true
       - ZEEBE_ADDRESS=zeebe:26500
+      - CAMUNDA_PROCESS_ID=Process_TimesheetApproval
     depends_on:
       zeebe:
+        condition: service_started
+
+  camunda-worker:
+    build: .
+    env_file:
+      - .env
+    environment:
+      - CAMUNDA_ENABLED=true
+      - ZEEBE_ADDRESS=zeebe:26500
+      - CAMUNDA_PROCESS_ID=Process_TimesheetApproval
+    depends_on:
+      zeebe:
+        condition: service_started
+      db:
         condition: service_healthy
+    command: python run_camunda_worker.py
+    restart: unless-stopped
 
 volumes:
   elasticsearch_data:

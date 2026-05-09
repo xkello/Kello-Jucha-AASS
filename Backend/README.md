@@ -61,6 +61,56 @@ To stop containers:
 docker compose down
 ```
 
+### RabbitMQ variant
+
+Run the RabbitMQ-enhanced variant with workers:
+
+```powershell
+docker compose -f docker-compose.yml -f docker-compose.rabbitmq.yml up --build
+```
+
+This starts:
+
+- database
+- backend
+- RabbitMQ
+- worker containers for audit, notification, timesheet, absence, and approval flows
+
+### Camunda variant
+
+Run the Camunda/Zeebe workflow variant:
+
+```powershell
+docker compose -f docker-compose.yml -f docker-compose.camunda.yml up --build -d
+```
+
+After the stack is up, restart backend and worker once so they reconnect after Zeebe is fully ready:
+
+```powershell
+docker compose -f docker-compose.yml -f docker-compose.camunda.yml restart backend camunda-worker
+```
+
+This starts:
+
+- database
+- backend
+- Camunda Zeebe
+- Operate UI
+- Elasticsearch
+- dedicated Camunda worker container
+
+Useful Camunda URLs:
+
+- Operate UI: `http://localhost:8080`
+- Zeebe gateway: `localhost:26500`
+
+Operate login:
+
+- username: `demo`
+- password: `demo`
+
+Camunda mode is enabled only in this compose variant through environment variables.
+
 ### Run tests locally
 
 If you have a local Python virtual environment in `Backend/.venv`:
@@ -124,6 +174,10 @@ SECRET_KEY=change-me-in-production
 DATABASE_URL=postgresql+psycopg://postgres:postgres@db:5432/timesheet_portal
 SEED_DEMO_DATA=true
 DEMO_PASSWORD=demo123
+RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+CAMUNDA_ENABLED=false
+ZEEBE_ADDRESS=zeebe:26500
+CAMUNDA_PROCESS_ID=Process_TimesheetApproval
 ```
 
 ## Main Endpoints
@@ -191,3 +245,6 @@ DEMO_PASSWORD=demo123
 - Backend CORS is configured for local frontend development ports such as `5173`, `5174`, and `5175`
 - Docker builds ignore local caches through `Backend/.dockerignore`
 - If Docker says `docker` is not recognized, install Docker Desktop first
+- The Camunda BPMN process is stored in `Backend/camunda/processes/timesheet-approval.bpmn`
+- Classic, RabbitMQ, and Camunda variants are intentionally separated through compose overrides
+- For the Camunda demo, verify workflow instances in Operate after submitting and approving/rejecting a timesheet

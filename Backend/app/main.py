@@ -7,6 +7,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.api import absences, audit, auth, manager, teams, timesheets, users
+from app.camunda import service as camunda
 from app.core.config import settings
 from app.core.database import get_db
 from app.messaging import connection as mq
@@ -16,16 +17,22 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # ── Startup ──────────────────────────────────────────────────────────────
+    if settings.rabbitmq_enabled:
+        try:
+            await mq.connect(settings.rabbitmq_url)
+        except Exception:
+            logger.warning("RabbitMQ unavailable on startup - messaging disabled", exc_info=True)
+
     try:
-        await mq.connect(settings.rabbitmq_url)
+        await camunda.startup()
     except Exception:
-        logger.warning("RabbitMQ unavailable on startup – messaging disabled", exc_info=True)
+        logger.warning("Camunda unavailable on startup - workflow integration disabled", exc_info=True)
 
     yield
 
-    # ── Shutdown ─────────────────────────────────────────────────────────────
-    await mq.disconnect()
+    if settings.rabbitmq_enabled:
+        await mq.disconnect()
+    await camunda.shutdown()
 
 
 app = FastAPI(

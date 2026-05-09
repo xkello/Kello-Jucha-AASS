@@ -6,6 +6,7 @@ from typing import Iterable
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 
+from app.camunda import service as camunda
 from app.models import AbsenceRequest, AbsenceStatus, AbsenceType, DayType, RoleEnum, Timesheet, TimesheetDay, TimesheetStatus, User
 from app.schemas import DayEntryCreate
 from app.services.access import ensure_manager_or_admin_for_target
@@ -169,6 +170,15 @@ def submit_timesheet(db: Session, actor: User, timesheet: Timesheet) -> Timeshee
         year=timesheet.year,
         month=timesheet.month,
     ))
+    camunda.schedule(
+        camunda.start_timesheet_process(
+            timesheet_id=timesheet.id,
+            user_id=timesheet.user_id,
+            actor_id=actor.id,
+            month=timesheet.month,
+            year=timesheet.year,
+        )
+    )
     return timesheet
 
 
@@ -194,6 +204,13 @@ def approve_timesheet(db: Session, actor: User, timesheet: Timesheet) -> Timeshe
         decision="approved",
         target_user_id=timesheet.user_id,
     ))
+    camunda.schedule(
+        camunda.publish_timesheet_decision(
+            timesheet_id=timesheet.id,
+            actor_id=actor.id,
+            approved=True,
+        )
+    )
     return timesheet
 
 
@@ -218,6 +235,14 @@ def reject_timesheet(db: Session, actor: User, timesheet: Timesheet, comment: st
         target_user_id=timesheet.user_id,
         comment=timesheet.rejection_comment,
     ))
+    camunda.schedule(
+        camunda.publish_timesheet_decision(
+            timesheet_id=timesheet.id,
+            actor_id=actor.id,
+            approved=False,
+            comment=timesheet.rejection_comment,
+        )
+    )
     db.refresh(timesheet)
     return timesheet
 

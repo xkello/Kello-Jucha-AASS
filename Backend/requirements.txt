@@ -10,3 +10,4 @@ email-validator==2.2.0
 pytest==8.3.5
 httpx==0.28.1
 aio-pika==9.5.5
+pyzeebe==4.7.0

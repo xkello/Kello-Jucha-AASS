@@ -1,0 +1,321 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions
+  xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+  xmlns:zeebe="http://camunda.org/schema/zeebe/1.0"
+  xmlns:modeler="http://camunda.org/schema/modeler/1.0"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  id="Definitions_TimesheetApproval"
+  targetNamespace="http://bpmn.io/schema/bpmn"
+  exporter="Camunda Modeler"
+  exporterVersion="5.46.1"
+  modeler:executionPlatform="Camunda Cloud"
+  modeler:executionPlatformVersion="8.9.0">
+  <bpmn:message id="Message_ManagerDecision" name="timesheet.decision">
+    <bpmn:extensionElements>
+      <zeebe:subscription correlationKey="=string(timesheetId)" />
+    </bpmn:extensionElements>
+  </bpmn:message>
+
+  <bpmn:collaboration id="Collaboration_TimesheetApproval">
+    <bpmn:participant
+      id="Participant_TimesheetApproval"
+      name="Timesheet approval process"
+      processRef="Process_TimesheetApproval" />
+  </bpmn:collaboration>
+
+  <bpmn:process id="Process_TimesheetApproval" isExecutable="true">
+    <bpmn:laneSet id="LaneSet_TimesheetApproval">
+      <bpmn:lane id="Lane_Employee" name="Employee">
+        <bpmn:flowNodeRef>StartEvent_TimesheetSubmitted</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_System" name="System">
+        <bpmn:flowNodeRef>Task_ValidateTimesheet</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_IsValid</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_ReturnForCorrection</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_NotifyCorrection</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>EndEvent_ReturnedForCorrection</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_AssignManager</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_IsApproved</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_SetApproved</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_ArchiveTimesheet</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_SendApprovalConfirmation</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>EndEvent_Approved</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_SetRejected</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_NotifyRejected</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>EndEvent_Rejected</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_Manager" name="Manager">
+        <bpmn:flowNodeRef>Event_WaitForManagerDecision</bpmn:flowNodeRef>
+      </bpmn:lane>
+    </bpmn:laneSet>
+
+    <bpmn:startEvent id="StartEvent_TimesheetSubmitted" name="Timesheet submitted">
+      <bpmn:outgoing>Flow_StartToValidate</bpmn:outgoing>
+    </bpmn:startEvent>
+
+    <bpmn:serviceTask id="Task_ValidateTimesheet" name="Validate timesheet">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="validate-timesheet" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_StartToValidate</bpmn:incoming>
+      <bpmn:outgoing>Flow_ValidateToGateway</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:exclusiveGateway id="Gateway_IsValid" name="Is timesheet valid?" default="Flow_Invalid">
+      <bpmn:incoming>Flow_ValidateToGateway</bpmn:incoming>
+      <bpmn:outgoing>Flow_Valid</bpmn:outgoing>
+      <bpmn:outgoing>Flow_Invalid</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <bpmn:serviceTask id="Task_ReturnForCorrection" name="Return for correction">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="return-timesheet" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_Invalid</bpmn:incoming>
+      <bpmn:outgoing>Flow_ReturnToNotify</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="Task_NotifyCorrection" name="Notify employee about correction">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="notify-employee-correction" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_ReturnToNotify</bpmn:incoming>
+      <bpmn:outgoing>Flow_NotifyToReturnedEnd</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:endEvent id="EndEvent_ReturnedForCorrection" name="Returned for correction">
+      <bpmn:incoming>Flow_NotifyToReturnedEnd</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <bpmn:serviceTask id="Task_AssignManager" name="Assign manager">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="assign-manager" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_Valid</bpmn:incoming>
+      <bpmn:outgoing>Flow_AssignToWait</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:intermediateCatchEvent id="Event_WaitForManagerDecision" name="Wait for manager decision">
+      <bpmn:incoming>Flow_AssignToWait</bpmn:incoming>
+      <bpmn:outgoing>Flow_WaitToApprovalGateway</bpmn:outgoing>
+      <bpmn:messageEventDefinition messageRef="Message_ManagerDecision" />
+    </bpmn:intermediateCatchEvent>
+
+    <bpmn:exclusiveGateway id="Gateway_IsApproved" name="Approved?" default="Flow_Rejected">
+      <bpmn:incoming>Flow_WaitToApprovalGateway</bpmn:incoming>
+      <bpmn:outgoing>Flow_Approved</bpmn:outgoing>
+      <bpmn:outgoing>Flow_Rejected</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <bpmn:serviceTask id="Task_SetApproved" name="Set approved status">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="set-timesheet-approved" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_Approved</bpmn:incoming>
+      <bpmn:outgoing>Flow_SetApprovedToArchive</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="Task_ArchiveTimesheet" name="Archive timesheet">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="archive-timesheet" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_SetApprovedToArchive</bpmn:incoming>
+      <bpmn:outgoing>Flow_ArchiveToNotifyApproval</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="Task_SendApprovalConfirmation" name="Send approval confirmation">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="send-approval-confirmation" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_ArchiveToNotifyApproval</bpmn:incoming>
+      <bpmn:outgoing>Flow_NotifyApprovalToEnd</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:endEvent id="EndEvent_Approved" name="Timesheet approved">
+      <bpmn:incoming>Flow_NotifyApprovalToEnd</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <bpmn:serviceTask id="Task_SetRejected" name="Set rejected status">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="set-timesheet-rejected" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_Rejected</bpmn:incoming>
+      <bpmn:outgoing>Flow_SetRejectedToNotify</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="Task_NotifyRejected" name="Notify employee about rejection">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="notify-employee-rejection" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_SetRejectedToNotify</bpmn:incoming>
+      <bpmn:outgoing>Flow_NotifyRejectedToEnd</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:endEvent id="EndEvent_Rejected" name="Timesheet rejected">
+      <bpmn:incoming>Flow_NotifyRejectedToEnd</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <bpmn:sequenceFlow id="Flow_StartToValidate" sourceRef="StartEvent_TimesheetSubmitted" targetRef="Task_ValidateTimesheet" />
+    <bpmn:sequenceFlow id="Flow_ValidateToGateway" sourceRef="Task_ValidateTimesheet" targetRef="Gateway_IsValid" />
+    <bpmn:sequenceFlow id="Flow_Valid" name="yes" sourceRef="Gateway_IsValid" targetRef="Task_AssignManager">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">= isValid</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_Invalid" name="no" sourceRef="Gateway_IsValid" targetRef="Task_ReturnForCorrection" />
+    <bpmn:sequenceFlow id="Flow_ReturnToNotify" sourceRef="Task_ReturnForCorrection" targetRef="Task_NotifyCorrection" />
+    <bpmn:sequenceFlow id="Flow_NotifyToReturnedEnd" sourceRef="Task_NotifyCorrection" targetRef="EndEvent_ReturnedForCorrection" />
+    <bpmn:sequenceFlow id="Flow_AssignToWait" sourceRef="Task_AssignManager" targetRef="Event_WaitForManagerDecision" />
+    <bpmn:sequenceFlow id="Flow_WaitToApprovalGateway" sourceRef="Event_WaitForManagerDecision" targetRef="Gateway_IsApproved" />
+    <bpmn:sequenceFlow id="Flow_Approved" name="yes" sourceRef="Gateway_IsApproved" targetRef="Task_SetApproved">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">= approved</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_Rejected" name="no" sourceRef="Gateway_IsApproved" targetRef="Task_SetRejected" />
+    <bpmn:sequenceFlow id="Flow_SetApprovedToArchive" sourceRef="Task_SetApproved" targetRef="Task_ArchiveTimesheet" />
+    <bpmn:sequenceFlow id="Flow_ArchiveToNotifyApproval" sourceRef="Task_ArchiveTimesheet" targetRef="Task_SendApprovalConfirmation" />
+    <bpmn:sequenceFlow id="Flow_NotifyApprovalToEnd" sourceRef="Task_SendApprovalConfirmation" targetRef="EndEvent_Approved" />
+    <bpmn:sequenceFlow id="Flow_SetRejectedToNotify" sourceRef="Task_SetRejected" targetRef="Task_NotifyRejected" />
+    <bpmn:sequenceFlow id="Flow_NotifyRejectedToEnd" sourceRef="Task_NotifyRejected" targetRef="EndEvent_Rejected" />
+  </bpmn:process>
+
+  <bpmndi:BPMNDiagram id="BPMNDiagram_TimesheetApproval">
+    <bpmndi:BPMNPlane id="BPMNPlane_TimesheetApproval" bpmnElement="Collaboration_TimesheetApproval">
+      <bpmndi:BPMNShape id="Participant_TimesheetApproval_di" bpmnElement="Participant_TimesheetApproval" isHorizontal="true">
+        <dc:Bounds x="140" y="80" width="1980" height="510" />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Lane_Employee_di" bpmnElement="Lane_Employee" isHorizontal="true">
+        <dc:Bounds x="170" y="80" width="1950" height="120" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_System_di" bpmnElement="Lane_System" isHorizontal="true">
+        <dc:Bounds x="170" y="200" width="1950" height="250" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_Manager_di" bpmnElement="Lane_Manager" isHorizontal="true">
+        <dc:Bounds x="170" y="450" width="1950" height="140" />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="StartEvent_TimesheetSubmitted_di" bpmnElement="StartEvent_TimesheetSubmitted">
+        <dc:Bounds x="240" y="122" width="36" height="36" />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Task_ValidateTimesheet_di" bpmnElement="Task_ValidateTimesheet">
+        <dc:Bounds x="330" y="285" width="120" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_IsValid_di" bpmnElement="Gateway_IsValid" isMarkerVisible="true">
+        <dc:Bounds x="500" y="300" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_ReturnForCorrection_di" bpmnElement="Task_ReturnForCorrection">
+        <dc:Bounds x="620" y="220" width="120" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_NotifyCorrection_di" bpmnElement="Task_NotifyCorrection">
+        <dc:Bounds x="790" y="220" width="120" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_ReturnedForCorrection_di" bpmnElement="EndEvent_ReturnedForCorrection">
+        <dc:Bounds x="970" y="242" width="36" height="36" />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Task_AssignManager_di" bpmnElement="Task_AssignManager">
+        <dc:Bounds x="620" y="340" width="120" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_WaitForManagerDecision_di" bpmnElement="Event_WaitForManagerDecision">
+        <dc:Bounds x="818" y="502" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_IsApproved_di" bpmnElement="Gateway_IsApproved" isMarkerVisible="true">
+        <dc:Bounds x="950" y="355" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_SetApproved_di" bpmnElement="Task_SetApproved">
+        <dc:Bounds x="1070" y="285" width="120" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_ArchiveTimesheet_di" bpmnElement="Task_ArchiveTimesheet">
+        <dc:Bounds x="1240" y="285" width="120" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_SendApprovalConfirmation_di" bpmnElement="Task_SendApprovalConfirmation">
+        <dc:Bounds x="1410" y="285" width="120" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_Approved_di" bpmnElement="EndEvent_Approved">
+        <dc:Bounds x="1590" y="307" width="36" height="36" />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Task_SetRejected_di" bpmnElement="Task_SetRejected">
+        <dc:Bounds x="1070" y="390" width="120" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_NotifyRejected_di" bpmnElement="Task_NotifyRejected">
+        <dc:Bounds x="1240" y="390" width="120" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_Rejected_di" bpmnElement="EndEvent_Rejected">
+        <dc:Bounds x="1590" y="412" width="36" height="36" />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNEdge id="Flow_StartToValidate_di" bpmnElement="Flow_StartToValidate">
+        <di:waypoint x="276" y="140" />
+        <di:waypoint x="330" y="140" />
+        <di:waypoint x="330" y="325" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ValidateToGateway_di" bpmnElement="Flow_ValidateToGateway">
+        <di:waypoint x="450" y="325" />
+        <di:waypoint x="500" y="325" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Valid_di" bpmnElement="Flow_Valid">
+        <di:waypoint x="550" y="325" />
+        <di:waypoint x="620" y="380" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Invalid_di" bpmnElement="Flow_Invalid">
+        <di:waypoint x="525" y="300" />
+        <di:waypoint x="525" y="260" />
+        <di:waypoint x="620" y="260" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ReturnToNotify_di" bpmnElement="Flow_ReturnToNotify">
+        <di:waypoint x="740" y="260" />
+        <di:waypoint x="790" y="260" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_NotifyToReturnedEnd_di" bpmnElement="Flow_NotifyToReturnedEnd">
+        <di:waypoint x="910" y="260" />
+        <di:waypoint x="970" y="260" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_AssignToWait_di" bpmnElement="Flow_AssignToWait">
+        <di:waypoint x="680" y="420" />
+        <di:waypoint x="680" y="520" />
+        <di:waypoint x="818" y="520" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_WaitToApprovalGateway_di" bpmnElement="Flow_WaitToApprovalGateway">
+        <di:waypoint x="854" y="520" />
+        <di:waypoint x="880" y="520" />
+        <di:waypoint x="880" y="380" />
+        <di:waypoint x="950" y="380" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Approved_di" bpmnElement="Flow_Approved">
+        <di:waypoint x="1000" y="380" />
+        <di:waypoint x="1035" y="380" />
+        <di:waypoint x="1035" y="325" />
+        <di:waypoint x="1070" y="325" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Rejected_di" bpmnElement="Flow_Rejected">
+        <di:waypoint x="1000" y="380" />
+        <di:waypoint x="1035" y="380" />
+        <di:waypoint x="1035" y="430" />
+        <di:waypoint x="1070" y="430" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_SetApprovedToArchive_di" bpmnElement="Flow_SetApprovedToArchive">
+        <di:waypoint x="1190" y="325" />
+        <di:waypoint x="1240" y="325" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ArchiveToNotifyApproval_di" bpmnElement="Flow_ArchiveToNotifyApproval">
+        <di:waypoint x="1360" y="325" />
+        <di:waypoint x="1410" y="325" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_NotifyApprovalToEnd_di" bpmnElement="Flow_NotifyApprovalToEnd">
+        <di:waypoint x="1530" y="325" />
+        <di:waypoint x="1590" y="325" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_SetRejectedToNotify_di" bpmnElement="Flow_SetRejectedToNotify">
+        <di:waypoint x="1190" y="430" />
+        <di:waypoint x="1240" y="430" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_NotifyRejectedToEnd_di" bpmnElement="Flow_NotifyRejectedToEnd">
+        <di:waypoint x="1360" y="430" />
+        <di:waypoint x="1590" y="430" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

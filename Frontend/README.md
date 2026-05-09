@@ -57,7 +57,7 @@ VITE_API_URL=http://localhost:8000
 ## Start Development Server
 
 ```powershell
-npm run dev
+npm.cmd run dev -- --host 0.0.0.0
 ```
 
 Then open the local URL shown by Vite.
@@ -80,7 +80,7 @@ docker compose up --build
 
 ```powershell
 cd c:\Users\tjuch\Documents\GitHub\AASS\Kello-Jucha-AASS\Frontend
-npm run dev
+npm.cmd run dev -- --host 0.0.0.0
 ```
 
 ## Demo Login
@@ -137,6 +137,20 @@ Frontend/
 ### `npm` is not recognized
 
 Install Node.js and reopen VS Code or PowerShell.
+
+### PowerShell blocks `npm.ps1`
+
+Use:
+
+```powershell
+npm.cmd run dev -- --host 0.0.0.0
+```
+
+or temporarily allow scripts in the current terminal:
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+```
 
 ### `Network Error` on login
 
